@@ -23,7 +23,9 @@ import com.sparrowwallet.hummingbird.ResultType;
 import com.sparrowwallet.hummingbird.UR;
 import com.sparrowwallet.hummingbird.URDecoder;
 import com.sparrowwallet.hummingbird.registry.pathcomponent.IndexPathComponent;
+import com.sparrowwallet.hummingbird.registry.pathcomponent.PairPathComponent;
 import com.sparrowwallet.hummingbird.registry.pathcomponent.PathComponent;
+import com.sparrowwallet.hummingbird.registry.pathcomponent.WildcardPathComponent;
 import com.sparrowwallet.sparrow.AppServices;
 import com.sparrowwallet.sparrow.EventManager;
 import com.sparrowwallet.sparrow.event.WebcamResolutionChangedEvent;
@@ -604,25 +606,57 @@ public class QRScanDialog extends Dialog<QRScanDialog.Result> {
             if(cryptoOutput.getMultiKey() != null) {
                 MultiKey multiKey = cryptoOutput.getMultiKey();
                 Map<ExtendedKey, KeyDerivation> extendedPublicKeys = new LinkedHashMap<>();
+                Map<ExtendedKey, String> extendedPublicKeyChildDerivations = new LinkedHashMap<>();
                 Map<ExtendedKey, String> extendedPublicKeyLabels = new LinkedHashMap<>();
                 for(CryptoHDKey cryptoHDKey : multiKey.getHdKeys()) {
                     ExtendedKey extendedKey = getExtendedKey(cryptoHDKey);
                     KeyDerivation keyDerivation = getKeyDerivation(cryptoHDKey.getOrigin());
                     extendedPublicKeys.put(extendedKey, keyDerivation);
+                    String childDerivation = getChildDerivation(cryptoHDKey.getChildren());
+                    if(childDerivation != null) {
+                        extendedPublicKeyChildDerivations.put(extendedKey, childDerivation);
+                    }
                     if(cryptoHDKey.getName() != null) {
                         extendedPublicKeyLabels.put(extendedKey, cryptoHDKey.getName());
                     }
                 }
-                return new OutputDescriptor(scriptType, multiKey.getThreshold(), extendedPublicKeys, new LinkedHashMap<>(), extendedPublicKeyLabels);
+                boolean sortedMultisig = cryptoOutput.getScriptExpressions().getLast() != ScriptExpression.MULTISIG;
+                return new OutputDescriptor(scriptType, multiKey.getThreshold(), extendedPublicKeys, extendedPublicKeyChildDerivations, extendedPublicKeyLabels, new LinkedHashMap<>(), new LinkedHashMap<>(), sortedMultisig);
             } else if(cryptoOutput.getEcKey() != null) {
                 throw new IllegalArgumentException("EC keys are currently unsupported");
             } else if(cryptoOutput.getHdKey() != null) {
                 ExtendedKey extendedKey = getExtendedKey(cryptoOutput.getHdKey());
                 KeyDerivation keyDerivation = getKeyDerivation(cryptoOutput.getHdKey().getOrigin());
+                String childDerivation = getChildDerivation(cryptoOutput.getHdKey().getChildren());
+                if(childDerivation != null) {
+                    String label = cryptoOutput.getHdKey().getName();
+                    return new OutputDescriptor(scriptType, 0, Map.of(extendedKey, keyDerivation), Map.of(extendedKey, childDerivation), label == null ? new LinkedHashMap<>() : Map.of(extendedKey, label));
+                }
                 return new OutputDescriptor(scriptType, extendedKey, keyDerivation, cryptoOutput.getHdKey().getName());
             }
 
             throw new IllegalStateException("CryptoOutput did not contain sufficient information");
+        }
+
+        private String getChildDerivation(CryptoKeypath children) {
+            if(children == null || children.getComponents() == null || children.getComponents().isEmpty()) {
+                return null;
+            }
+
+            StringBuilder builder = new StringBuilder();
+            for(PathComponent component : children.getComponents()) {
+                if(component instanceof PairPathComponent pair) {
+                    builder.append("/<").append(pair.getExternal().getIndex()).append(";").append(pair.getInternal().getIndex()).append(">");
+                } else if(component instanceof WildcardPathComponent) {
+                    builder.append("/*");
+                } else if(component instanceof IndexPathComponent index) {
+                    builder.append("/").append(index.getIndex()).append(index.isHardened() ? "h" : "");
+                } else {
+                    throw new IllegalArgumentException("Unsupported child derivation component " + component);
+                }
+            }
+
+            return builder.toString();
         }
 
         private List<Wallet> getWallets(CryptoAccount cryptoAccount) {

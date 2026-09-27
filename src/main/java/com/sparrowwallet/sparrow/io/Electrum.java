@@ -306,6 +306,9 @@ public class Electrum implements KeystoreFileImport, WalletImport, WalletExport 
 
     @Override
     public void exportWallet(Wallet wallet, OutputStream outputStream, String password) throws ExportException {
+        checkSortedMultisig(wallet);
+        checkStandardChildDerivation(wallet);
+
         try {
             ElectrumJsonWallet ew = new ElectrumJsonWallet();
             if(wallet.getPolicyType().equals(PolicyType.SINGLE_HD)) {

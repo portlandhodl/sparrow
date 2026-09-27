@@ -67,6 +67,8 @@ public class SpecterDIY implements KeystoreFileImport, WalletExport {
 
     @Override
     public void exportWallet(Wallet wallet, OutputStream outputStream, String password) throws ExportException {
+        checkStandardChildDerivation(wallet);
+
         try {
             BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(outputStream, StandardCharsets.UTF_8));
             writer.append("addwallet ").append(wallet.getFullName()).append("&").append(OutputDescriptor.getOutputDescriptor(wallet).toString().replace('\'', 'h')).append("\n");

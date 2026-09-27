@@ -19,6 +19,8 @@ public class SpecterDesktop implements WalletImport, WalletExport {
 
     @Override
     public void exportWallet(Wallet wallet, OutputStream outputStream, String password) throws ExportException {
+        checkStandardChildDerivation(wallet);
+
         try {
             SpecterWallet specterWallet = new SpecterWallet();
             specterWallet.label = wallet.getFullName();

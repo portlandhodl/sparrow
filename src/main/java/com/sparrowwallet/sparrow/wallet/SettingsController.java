@@ -11,7 +11,9 @@ import com.sparrowwallet.drongo.wallet.*;
 import com.sparrowwallet.hummingbird.UR;
 import com.sparrowwallet.hummingbird.registry.*;
 import com.sparrowwallet.hummingbird.registry.pathcomponent.IndexPathComponent;
+import com.sparrowwallet.hummingbird.registry.pathcomponent.PairPathComponent;
 import com.sparrowwallet.hummingbird.registry.pathcomponent.PathComponent;
+import com.sparrowwallet.hummingbird.registry.pathcomponent.WildcardPathComponent;
 import com.sparrowwallet.sparrow.AppServices;
 import com.sparrowwallet.sparrow.EventManager;
 import com.sparrowwallet.sparrow.control.*;
@@ -45,9 +47,9 @@ import java.util.*;
 import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static com.sparrowwallet.drongo.OutputDescriptor.KEY_ORIGIN_PATTERN;
-import static com.sparrowwallet.drongo.OutputDescriptor.LEGACY_MULTI_PATTERN;
 import static com.sparrowwallet.drongo.OutputDescriptor.XPUB_PATTERN;
 import static com.sparrowwallet.sparrow.AppServices.showErrorDialog;
 import static com.sparrowwallet.sparrow.AppServices.showWarningDialog;
@@ -415,19 +417,23 @@ public class SettingsController extends WalletFormController implements Initiali
         if(wallet.getPolicyType() == PolicyType.SINGLE_HD) {
             Keystore keystore = wallet.getKeystores().getFirst();
             KeyDerivation keyDerivation = keystore.getKeyDerivation();
-            registryItem = new CryptoOutput(scriptExpressions, getCryptoHDKey(keyDerivation.getMasterFingerprint(), keyDerivation.getDerivation(), keystore.getExtendedPublicKey(), keystore.getLabel()));
+            registryItem = new CryptoOutput(scriptExpressions, getCryptoHDKey(keyDerivation.getMasterFingerprint(), keyDerivation.getDerivation(), keystore.getExtendedPublicKey(), keystore.getLabel(), keystore));
         } else if(wallet.getPolicyType() == PolicyType.MULTI_HD) {
             WalletNode firstReceive = new WalletNode(wallet, KeyPurpose.RECEIVE, 0);
             Utils.LexicographicByteArrayComparator lexicographicByteArrayComparator = new Utils.LexicographicByteArrayComparator();
-            List<CryptoHDKey> cryptoHDKeys = wallet.getKeystores().stream().sorted((keystore1, keystore2) -> {
-                return lexicographicByteArrayComparator.compare(keystore1.getPubKey(firstReceive).getPubKey(), keystore2.getPubKey(firstReceive).getPubKey());
-            }).map(keystore -> {
+            Stream<Keystore> keystores = wallet.getKeystores().stream();
+            if(wallet.isSortedMultisig()) {
+                keystores = keystores.sorted((keystore1, keystore2) -> {
+                    return lexicographicByteArrayComparator.compare(keystore1.getPubKey(firstReceive).getPubKey(), keystore2.getPubKey(firstReceive).getPubKey());
+                });
+            }
+            List<CryptoHDKey> cryptoHDKeys = keystores.map(keystore -> {
                 KeyDerivation keyDerivation = keystore.getKeyDerivation();
-                return getCryptoHDKey(keyDerivation.getMasterFingerprint(), keyDerivation.getDerivation(), keystore.getExtendedPublicKey(), keystore.getLabel());
+                return getCryptoHDKey(keyDerivation.getMasterFingerprint(), keyDerivation.getDerivation(), keystore.getExtendedPublicKey(), keystore.getLabel(), keystore);
             }).collect(Collectors.toList());
             MultiKey multiKey = new MultiKey(wallet.getDefaultPolicy().getNumSignaturesRequired(), null, cryptoHDKeys);
             List<ScriptExpression> multiScriptExpressions = new ArrayList<>(scriptExpressions);
-            multiScriptExpressions.add(ScriptExpression.SORTED_MULTISIG);
+            multiScriptExpressions.add(wallet.isSortedMultisig() ? ScriptExpression.SORTED_MULTISIG : ScriptExpression.MULTISIG);
             registryItem = new CryptoOutput(multiScriptExpressions, multiKey);
         } else if(wallet.getPolicyType() == PolicyType.SINGLE_SP) {
             Keystore keystore = wallet.getKeystores().getFirst();
@@ -464,11 +470,22 @@ public class SettingsController extends WalletFormController implements Initiali
         throw new IllegalArgumentException("Unknown script type of " + scriptType);
     }
 
-    private static CryptoHDKey getCryptoHDKey(String masterFingerprint, List<ChildNumber> derivation, ExtendedKey extendedKey, String label) {
+    private static CryptoHDKey getCryptoHDKey(String masterFingerprint, List<ChildNumber> derivation, ExtendedKey extendedKey, String label, Keystore keystore) {
         CryptoCoinInfo cryptoCoinInfo = new CryptoCoinInfo(CryptoCoinInfo.Type.BITCOIN.ordinal(), Network.get() == Network.MAINNET ? CryptoCoinInfo.Network.MAINNET.ordinal() : CryptoCoinInfo.Network.TESTNET.ordinal());
         List<PathComponent> pathComponents = derivation.stream().map(cNum -> new IndexPathComponent(cNum.num(), cNum.isHardened())).collect(Collectors.toList());
         CryptoKeypath cryptoKeypath = new CryptoKeypath(pathComponents, Utils.hexToBytes(masterFingerprint), pathComponents.size());
-        return new CryptoHDKey(false, extendedKey.getKey().getPubKey(), extendedKey.getKey().getChainCode(), cryptoCoinInfo, cryptoKeypath, null, extendedKey.getParentFingerprint(), label, null);
+        return new CryptoHDKey(false, extendedKey.getKey().getPubKey(), extendedKey.getKey().getChainCode(), cryptoCoinInfo, cryptoKeypath, getChildrenKeypath(keystore), extendedKey.getParentFingerprint(), label, null);
+    }
+
+    //Only keystores with non standard receive and change chains specify them, as the /<0;1>/* default is assumed otherwise
+    private static CryptoKeypath getChildrenKeypath(Keystore keystore) {
+        if(keystore.getChildDerivation() == null) {
+            return null;
+        }
+
+        IndexPathComponent receive = new IndexPathComponent(keystore.getChildNumber(KeyPurpose.RECEIVE).num(), false);
+        IndexPathComponent change = new IndexPathComponent(keystore.getChildNumber(KeyPurpose.CHANGE).num(), false);
+        return new CryptoKeypath(List.of(new PairPathComponent(receive, change), new WildcardPathComponent(false)), null);
     }
 
     private static URHDKey getURHDKey(String masterFingerprint, List<ChildNumber> derivation, ECKey key, String label) {
@@ -486,12 +503,9 @@ public class SettingsController extends WalletFormController implements Initiali
         dialog.initOwner(editDescriptor.getScene().getWindow());
         dialog.setTitle("Edit wallet output descriptor");
         dialog.getDialogPane().setHeaderText("The wallet configuration is specified in the output descriptor.\nChanges to the output descriptor will modify the wallet configuration." +
-                (walletForm.getWallet().getPolicyType() == PolicyType.MULTI_HD ? "\nKey expressions are shown in canonical order." : ""));
+                (walletForm.getWallet().getPolicyType() == PolicyType.MULTI_HD && walletForm.getWallet().isSortedMultisig() ? "\nKey expressions are shown in canonical order." : ""));
         Optional<String> text = dialog.showAndWait();
         if(text.isPresent() && !text.get().isEmpty() && !text.get().equals(outputDescriptorString)) {
-            if(LEGACY_MULTI_PATTERN.matcher(text.get()).find()) {
-                AppServices.showWarningDialog("Legacy multisig wallet detected", "Sparrow supports BIP67 compatible multisig wallets only.\n\nThe public keys will be lexicographically sorted, and the output descriptor represented with sortedmulti.");
-            }
 
             Matcher matcher = XPUB_PATTERN.matcher(text.get());
             while(matcher.find()) {

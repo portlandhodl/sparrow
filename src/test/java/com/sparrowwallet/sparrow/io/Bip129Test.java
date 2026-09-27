@@ -33,11 +33,15 @@ public class Bip129Test extends IoTest {
                 wallet.getNode(KeyPurpose.RECEIVE).getChildren().iterator().next().getAddress().toString());
     }
 
-    //Test vector from BIP129 (EXTENDED encryption, round 2) - multi() is interpreted as sortedmulti(), but these keys are not in BIP67 order so sorting derives a different first address
+    //Test vector from BIP129 (EXTENDED encryption, round 2) - the keys of this multi() quorum are not in BIP67 order, and the import verifies the first address derived in key order
     @Test
-    public void importWallet3() {
+    public void importWallet3() throws ImportException {
         Bip129 bip129 = new Bip129();
-        Assertions.assertThrows(ImportException.class, () -> bip129.importWallet(getInputStream("bsms/multisig-3.bsms"), null));
+        Wallet wallet = bip129.importWallet(getInputStream("bsms/multisig-3.bsms"), null);
+        Assertions.assertFalse(wallet.isSortedMultisig());
+        Assertions.assertTrue(wallet.getDefaultPolicy().getMiniscript().getScript().startsWith("sh(wsh(multi("));
+        Assertions.assertTrue(wallet.isValid());
+        Assertions.assertEquals("3GzMtFXahiu4TpGNGFc4bHMvAcvz5vVQrT", wallet.getNode(KeyPurpose.RECEIVE).getChildren().iterator().next().getAddress().toString());
     }
 
     //As above, but with the first address uppercase as bech32 addresses are conventionally QR encoded

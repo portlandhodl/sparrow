@@ -14,6 +14,8 @@ import javafx.application.Platform;
 import javafx.scene.control.TreeItem;
 import javafx.scene.control.TreeTableView;
 
+import java.util.Objects;
+
 public abstract class WalletFormController extends BaseController {
     public WalletForm walletForm;
 
@@ -43,7 +45,7 @@ public abstract class WalletFormController extends BaseController {
         KeyDerivation firstDerivation = getWalletForm().getWallet().getKeystores().get(0).getKeyDerivation();
         String firstDerivationPath = KeyDerivation.writePath(firstDerivation.getDerivation());
         for(Keystore keystore : getWalletForm().getWallet().getKeystores()) {
-            if(!KeyDerivation.writePath(keystore.getKeyDerivation().getDerivation()).equals(firstDerivationPath)) {
+            if(!KeyDerivation.writePath(keystore.getKeyDerivation().getDerivation()).equals(firstDerivationPath) || !Objects.equals(keystore.getChildDerivation(), getWalletForm().getWallet().getKeystores().get(0).getChildDerivation())) {
                 return false;
             }
         }
@@ -53,8 +55,7 @@ public abstract class WalletFormController extends BaseController {
 
     protected String getDerivationPath(WalletNode node) {
         if(isSingleDerivationPath()) {
-            KeyDerivation firstDerivation = getWalletForm().getWallet().getKeystores().get(0).getKeyDerivation();
-            return firstDerivation.extend(node.getDerivation()).getDerivationPath();
+            return getWalletForm().getWallet().getKeystores().get(0).getDerivation(node).getDerivationPath();
         }
 
         return node.getDerivationPath().replace("m", "multi");

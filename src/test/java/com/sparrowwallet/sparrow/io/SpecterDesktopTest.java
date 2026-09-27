@@ -32,7 +32,9 @@ public class SpecterDesktopTest extends IoTest {
         Assertions.assertEquals(PolicyType.MULTI_HD, wallet.getPolicyType());
         Assertions.assertEquals(ScriptType.P2WSH, wallet.getScriptType());
         Assertions.assertEquals(3, wallet.getDefaultPolicy().getNumSignaturesRequired());
-        Assertions.assertEquals("wsh(sortedmulti(3,keystore1,keystore2,keystore3,keystore4))", wallet.getDefaultPolicy().getMiniscript().getScript().toLowerCase(Locale.ROOT));
+        //The Specter descriptor uses multi(), which derives addresses with the keys in descriptor order
+        Assertions.assertEquals("wsh(multi(3,keystore1,keystore2,keystore3,keystore4))", wallet.getDefaultPolicy().getMiniscript().getScript().toLowerCase(Locale.ROOT));
+        Assertions.assertFalse(wallet.isSortedMultisig());
         Assertions.assertEquals("ca9a2b19", wallet.getKeystores().get(0).getKeyDerivation().getMasterFingerprint());
         Assertions.assertEquals("m/48'/0'/0'/2'", wallet.getKeystores().get(0).getKeyDerivation().getDerivationPath());
         Assertions.assertEquals("xpub6EhbRDNhmMX863W8RujJyAMw1vtM4MHXnsk14paK1ZBEH75k44gWqfaraXCrzg6w9pzC2yLc28vAdUfpB9ShuEB1HA9xMs6BjmRi4PKbt1K", wallet.getKeystores().get(0).getExtendedPublicKey().toString());

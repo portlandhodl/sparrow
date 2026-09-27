@@ -205,6 +205,8 @@ public class Bip129 implements KeystoreFileExport, KeystoreFileImport, WalletExp
 
     @Override
     public void exportWallet(Wallet wallet, OutputStream outputStream, String password) throws ExportException {
+        checkStandardChildDerivation(wallet);
+
         try {
             String record = "BSMS 1.0\n" +
                     OutputDescriptor.getOutputDescriptor(wallet, KeyPurpose.DEFAULT_PURPOSES, null) +
@@ -325,13 +327,8 @@ public class Bip129 implements KeystoreFileExport, KeystoreFileImport, WalletExp
             return;
         }
 
-        if(OutputDescriptor.LEGACY_MULTI_PATTERN.matcher(descriptor).find()) {
-            throw new IllegalStateException("This file describes a multi() quorum, which Sparrow imports as the BIP67 sortedmulti() equivalent, and the first address in it (" + recordAddress + ") does not match the first address of " +
-                    firstAddress + " derived by sorting the provided keys. The addresses of this wallet would not match those of the other signers in the quorum unless they sort the keys in the same way.");
-        } else {
-            throw new IllegalStateException("The first address in this file (" + recordAddress + ") does not match the first address of the provided descriptor (" + firstAddress + "). " +
-                    "The coordinator may be providing a different set of keys to each signer in the quorum.");
-        }
+        throw new IllegalStateException("The first address in this file (" + recordAddress + ") does not match the first address of the provided descriptor (" + firstAddress + "). " +
+                "The coordinator may be providing a different set of keys to each signer in the quorum.");
     }
 
     //BIP129 defines the first address as the first address of the first path restriction, or where derivation is not restricted, the descriptor's only address

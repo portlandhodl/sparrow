@@ -412,7 +412,7 @@ public class MessageSignDialog extends Dialog<ButtonBar.ButtonData> {
 
     private void signDeviceKeystore(Wallet deviceWallet) {
         List<String> fingerprints = List.of(deviceWallet.getKeystores().getFirst().getKeyDerivation().getMasterFingerprint());
-        KeyDerivation fullDerivation = deviceWallet.getKeystores().getFirst().getKeyDerivation().extend(walletNode.getDerivation());
+        KeyDerivation fullDerivation = deviceWallet.getKeystores().getFirst().getDerivation(walletNode);
         DeviceSignMessageDialog deviceSignMessageDialog = new DeviceSignMessageDialog(fingerprints, deviceWallet, message.getText().trim(), fullDerivation);
         deviceSignMessageDialog.initOwner(getDialogPane().getScene().getWindow());
         Optional<String> optSignature = deviceSignMessageDialog.showAndWait();
@@ -499,8 +499,8 @@ public class MessageSignDialog extends Dialog<ButtonBar.ButtonData> {
         }
 
         //Note we can expect a single keystore due to the check in the constructor
-        KeyDerivation firstDerivation = walletNode.getWallet().getKeystores().get(0).getKeyDerivation();
-        String derivationPath = KeyDerivation.writePath(firstDerivation.extend(walletNode.getDerivation()).getDerivation(), false);
+        KeyDerivation firstDerivation = walletNode.getWallet().getKeystores().get(0).getDerivation(walletNode);
+        String derivationPath = KeyDerivation.writePath(firstDerivation.getDerivation(), false);
 
         String qrText = "signmessage " + derivationPath + " ascii:" + message.getText().trim();
         QRDisplayDialog qrDisplayDialog = new QRDisplayDialog(qrText, true);
@@ -565,7 +565,7 @@ public class MessageSignDialog extends Dialog<ButtonBar.ButtonData> {
         PSBTInput psbtInput = psbt.getPsbtInputs().get(0);
         Keystore keystore = signingWallet.getKeystores().get(0);
         ECKey pubKey = keystore.getPubKey(walletNode);
-        KeyDerivation fullDerivation = keystore.getKeyDerivation().extend(walletNode.getDerivation());
+        KeyDerivation fullDerivation = keystore.getDerivation(walletNode);
 
         if(scriptType == ScriptType.P2TR) {
             psbtInput.setTapInternalKey(pubKey);
@@ -618,8 +618,8 @@ public class MessageSignDialog extends Dialog<ButtonBar.ButtonData> {
         StringJoiner joiner = new StringJoiner("\n");
         joiner.add(message.getText().trim().replaceAll("\r*\n*", ""));
         //Note we can expect a single keystore due to the check in the constructor
-        KeyDerivation firstDerivation = walletNode.getWallet().getKeystores().get(0).getKeyDerivation();
-        joiner.add(KeyDerivation.writePath(firstDerivation.extend(walletNode.getDerivation()).getDerivation(), true));
+        KeyDerivation firstDerivation = walletNode.getWallet().getKeystores().get(0).getDerivation(walletNode);
+        joiner.add(KeyDerivation.writePath(firstDerivation.getDerivation(), true));
         joiner.add(walletNode.getWallet().getScriptType().toString());
 
         Stage window = new Stage();

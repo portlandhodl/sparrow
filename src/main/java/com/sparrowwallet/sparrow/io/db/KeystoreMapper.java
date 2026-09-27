@@ -24,6 +24,7 @@ public class KeystoreMapper implements RowMapper<Keystore> {
         keystore.setSource(KeystoreSource.values()[rs.getInt("keystore.source")]);
         keystore.setWalletModel(WalletModel.values()[rs.getInt("keystore.walletModel")]);
         keystore.setKeyDerivation(new KeyDerivation(rs.getString("keystore.masterFingerprint"), rs.getString("keystore.derivationPath")));
+        keystore.setChildDerivation(rs.getString("keystore.childDerivation"));
         keystore.setExtendedPublicKey(rs.getString("keystore.extendedPublicKey") == null ? null : ExtendedKey.fromDescriptor(rs.getString("keystore.extendedPublicKey")));
         keystore.setExternalPaymentCode(rs.getString("keystore.externalPaymentCode") == null ? null : PaymentCode.fromString(rs.getString("keystore.externalPaymentCode")));
         keystore.setSilentPaymentScanAddress(rs.getBytes("keystore.silentPaymentScanAddress") == null ? null : SilentPaymentScanAddress.fromBytes(rs.getBytes("keystore.silentPaymentScanAddress")));

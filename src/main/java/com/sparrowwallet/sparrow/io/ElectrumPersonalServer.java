@@ -30,6 +30,9 @@ public class ElectrumPersonalServer implements WalletExport {
 
     @Override
     public void exportWallet(Wallet wallet, OutputStream outputStream, String password) throws ExportException {
+        checkSortedMultisig(wallet);
+        checkStandardChildDerivation(wallet);
+
         if(wallet.getPolicyType() == PolicyType.SINGLE_SP) {
             throw new ExportException(getName() + " does not support silent payments wallets.");
         }

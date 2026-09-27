@@ -2,6 +2,8 @@ package com.sparrowwallet.sparrow.io;
 
 import com.sparrowwallet.drongo.ExtendedKey;
 import com.sparrowwallet.drongo.KeyDerivation;
+import com.sparrowwallet.drongo.KeyPurpose;
+import com.sparrowwallet.drongo.OutputDescriptor;
 import com.sparrowwallet.drongo.crypto.Argon2KeyDeriver;
 import com.sparrowwallet.drongo.crypto.ECKey;
 import com.sparrowwallet.drongo.policy.Policy;
@@ -12,6 +14,7 @@ import com.sparrowwallet.drongo.wallet.Keystore;
 import com.sparrowwallet.drongo.wallet.KeystoreSource;
 import com.sparrowwallet.drongo.wallet.Wallet;
 import com.sparrowwallet.drongo.wallet.WalletModel;
+import com.sparrowwallet.drongo.wallet.WalletNode;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -217,5 +220,35 @@ public class DbPersistenceTest {
         storage.closeAndWait();
 
         Assertions.assertTrue(isWalletValid(storage.getWalletFile(), null));
+    }
+
+    private static final String CUSTOM_CHAIN_DESCRIPTOR = "wsh(multi(2,[00000004/0/0/0/0]xpub6ESApoTBCctw7rBf6A2kKaMekdtXQ9SS1MmWxYCZEUcjRptReaFvi1NXCaUhiSNCzaxeMzzh1S6sMud4ihHnv46jjF8nFnrAmpX6pdRsAd6/0/0/<20;21>/*," +
+            "[00000003/0/0/0/0]xpub6EWeDK8fGBHhUgb5udr7kmdsgxPd613AQGh2ZPvmDtrSdU3Hyqr3yGaozpTDhHexCczjt8maQpS68aqxL1bduwh6UDf8zPayLRLZCpaVdzr/0/0/<20;21>/*," +
+            "[00000005/0/0/0/0]xpub6D7FUuTvP5SN6YyyVriZwjLWCDDKkkoDdJ18DkU4rivAxW9n9Sz8iPC79h1UmZBhNTdNQEW67mLFQQKAHsUB8fTRkQ2W6FZKdsq1gkUdjWd/0/0/<20;21>/*))";
+
+    @Test
+    public void unsortedMultisigCustomChainsRoundTrip() throws Exception {
+        Wallet wallet = OutputDescriptor.getOutputDescriptor(CUSTOM_CHAIN_DESCRIPTOR).toWallet();
+        wallet.setName("Custom Chains");
+        File walletFile = tempDir.resolve("Custom Chains." + PersistenceType.DB.getExtension()).toFile();
+        Storage storage = new Storage(PersistenceType.DB, walletFile);
+        storage.setKeyDeriver(new Argon2KeyDeriver());
+        storage.setEncryptionPubKey(Storage.NO_PASSWORD_KEY);
+        storage.saveWallet(wallet);
+        storage.closeAndWait();
+
+        Storage loadStorage = new Storage(PersistenceType.DB, walletFile);
+        try {
+            Wallet loaded = loadStorage.loadUnencryptedWallet().getWallet();
+            Assertions.assertFalse(loaded.isSortedMultisig());
+            for(Keystore keystore : loaded.getKeystores()) {
+                Assertions.assertEquals("/<20;21>/*", keystore.getChildDerivation());
+            }
+            //Expected addresses from Bitcoin Core deriveaddresses
+            Assertions.assertEquals("bc1qejjpms4tvwdtqp0kgc95kvf2s8n233meytrpal6xcvlqekqc90hq9s3p4h", new WalletNode(loaded, KeyPurpose.RECEIVE, 0).getAddress().toString());
+            Assertions.assertEquals("bc1qz2e3lrey4232pk6upr4fwn68uef5nu84u5ljy8n90acg3vxles3q0denk0", new WalletNode(loaded, KeyPurpose.CHANGE, 0).getAddress().toString());
+        } finally {
+            loadStorage.closeAndWait();
+        }
     }
 }

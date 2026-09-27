@@ -20,6 +20,7 @@ import org.slf4j.LoggerFactory;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 public class ReceiveDialog extends WalletDialog {
@@ -120,8 +121,7 @@ public class ReceiveDialog extends WalletDialog {
 
     protected String getDerivationPath(WalletNode node) {
         if(isSingleDerivationPath()) {
-            KeyDerivation firstDerivation = getWalletForm().getWallet().getKeystores().get(0).getKeyDerivation();
-            return firstDerivation.extend(node.getDerivation()).getDerivationPath();
+            return getWalletForm().getWallet().getKeystores().get(0).getDerivation(node).getDerivationPath();
         }
 
         return node.getDerivationPath().replace("m", "multi");
@@ -130,7 +130,7 @@ public class ReceiveDialog extends WalletDialog {
     protected boolean isSingleDerivationPath() {
         KeyDerivation firstDerivation = getWalletForm().getWallet().getKeystores().get(0).getKeyDerivation();
         for(Keystore keystore : getWalletForm().getWallet().getKeystores()) {
-            if(!keystore.getKeyDerivation().getDerivationPath().equals(firstDerivation.getDerivationPath())) {
+            if(!keystore.getKeyDerivation().getDerivationPath().equals(firstDerivation.getDerivationPath()) || !Objects.equals(keystore.getChildDerivation(), getWalletForm().getWallet().getKeystores().get(0).getChildDerivation())) {
                 return false;
             }
         }
